@@ -14,21 +14,63 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+import { CONSTANTS } from './constants';
 
-class AppUpdater {
+const { dialog } = require('electron');
+
+export default class AppUpdater {
   constructor() {
     log.transports.file.level = 'info';
     autoUpdater.logger = log;
-    autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.checkForUpdates();
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
   }
 }
-
 let mainWindow: BrowserWindow | null = null;
 
-ipcMain.on('ipc-example', async (event, arg) => {
-  const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
-  event.reply('ipc-example', msgTemplate('pong'));
+autoUpdater.on('update-available', (event) => {
+  const response = dialog.showMessageBox(mainWindow!, {
+    title: 'Update',
+    buttons: ['Ok'],
+    type: 'info',
+    message:
+      'Update Available for versiuon ' +
+      event.version +
+      ' available and will be auto downloaded',
+  });
+});
+
+// autoUpdater.on('download-progress', (event) => {
+//   log.info(event.percent);
+// });
+
+autoUpdater.on('update-downloaded', (event) => {
+  // const response = dialog.showMessageBox(mainWindow!, {
+  //   title: 'Update',
+  //   buttons: ['Ok'],
+  //   type: 'info',
+  //   message:
+  //     'Downloading new version completed and will be installed after the app exists. Please quit the app to install the update.'
+  // });
+
+  dialog
+    .showMessageBox({
+      type: 'info',
+      buttons: ['Restart', 'Later'],
+      title: 'Update',
+      message: 'A new version has been downloaded.',
+      detail: 'Restart the application to apply the updates.',
+    })
+    .then((returnValue) => {
+      if (returnValue.response === 0) autoUpdater.quitAndInstall();
+    });
+});
+
+ipcMain.on(CONSTANTS.IPC_EVENTS.VERSION, async (event) => {
+  const ver = () => `${app.getVersion()}`;
+  // console.log(ver());
+  event.reply(CONSTANTS.IPC_EVENTS.VERSION, ver());
 });
 
 if (process.env.NODE_ENV === 'production') {
